@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mahalla doʻkoni</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#f2f5ef;--card:#fff;--ink:#16291f;--mute:#5d6f64;--line:#dce4d8;--green:#1f6b45;--sun:#f0b92e}
+@media (prefers-color-scheme:dark){:root{--bg:#101a14;--card:#18261d;--ink:#eaf2ec;--mute:#9bb0a2;--line:#2a3c31;--green:#5fc78b;--sun:#f0b92e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:0 0 110px}
+header{padding:22px 18px 8px}
+h1{font-size:24px;margin:0;font-weight:700}
+header p{margin:4px 0 0;color:var(--mute);font-size:14px}
+[hidden]{display:none!important}
+h2{font-size:15px;margin:18px 4px 8px;color:var(--mute);font-weight:600}
+.list{padding:8px 14px}
+.row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.info{flex:1;min-width:0}
+.name{font-weight:600}
+.sub{color:var(--mute);font-size:13px}
+.price{font-weight:600;margin-top:2px}
+.ctl{display:flex;align-items:center;gap:10px}
+.ctl button{width:36px;height:36px;border-radius:50%;border:1px solid var(--green);background:transparent;color:var(--green);font-size:20px;line-height:1;cursor:pointer}
+.ctl button.add{background:var(--green);color:#fff}
+.ctl span{min-width:18px;text-align:center;font-weight:600}
+form{padding:6px 14px 0}
+label{display:block;font-size:14px;color:var(--mute);margin:12px 4px 4px}
+input,textarea{width:100%;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--green);outline-offset:1px}
+.err{color:#c0392b;font-size:14px;margin:10px 4px 0;min-height:20px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:12px}
+.sum{flex:1;font-size:13px;color:var(--mute)}
+.sum b{display:block;font-size:18px;color:var(--ink)}
+.res{padding:0 14px 18px}.res .go{display:block;width:100%;text-align:center;text-decoration:none;margin-top:10px}
+.go{background:var(--sun);color:#2a2000;border:0;border-radius:12px;font:inherit;font-weight:700;padding:14px 20px;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mahalla doʻkoni</h1>
+  <p>Buyurtma bering, uyingizgacha yetkazib beramiz.</p>
+  <input id="q" type="search" placeholder="Mahsulot qidirish" aria-label="Mahsulot qidirish" style="margin-top:12px">
+</header>
+<div class="list" id="list"></div>
+<form id="f" onsubmit="return false">
+  <label for="addr">Manzil</label>
+  <textarea id="addr" rows="2" placeholder="Koʻcha, uy raqami, moʻljal"></textarea>
+  <label for="tel">Telefon raqam</label>
+  <input id="tel" type="tel" inputmode="tel" placeholder="90 123 45 67">
+  <label for="note">Izoh (ixtiyoriy)</label>
+  <input id="note" type="text" placeholder="Masalan: qoʻngʻiroq qilib keling">
+  <div class="err" id="err" role="alert"></div>
+</form>
+<div id="res" class="res" hidden>
+  <label id="rl"></label>
+  <textarea id="msg" rows="9" readonly></textarea>
+  <a id="send" class="go" href="#">Telegramda yuborish</a>
+  <button class="go" id="cp" type="button">Matnni nusxalash</button>
+</div>
+<div class="bar">
+  <div class="sum">Yetkazish: <span id="dl"></span><b id="total">0 soʻm</b></div>
+  <button class="go" id="go">Buyurtma berish</button>
+</div>
+
+<script>
+/* ===== SOZLAMALAR: faqat shu qismni oʻzgartiring ===== */
+const OWNER = "sdauletaliev_";   // @ belgisisiz Telegram username
+const DELIVERY = 4000;              // yetkazish haqi (soʻm)
+const CATS = {
+"Non va un mahsulotlari": [["Non","1 dona",2500],["Bulka","1 dona",3000],["Patir","1 dona",6000],["Un","1 kg",8000],["Makaron","400 g",6000],["Lagʻmon xamiri","500 g",8000]],
+"Ichimliklar": [["Coca-Cola","2 litr",20000],["Pepsi","2 litr",20000],["Fanta","2 litr",20000],["Sprite","2 litr",20000],["Cola","1 litr",12000],["Suv","1,5 litr",4000],["Gazsiz suv","5 litr",8000],["Mineral suv","1,5 litr",5000],["Energetik","0,5 litr",12000]],
+"Sut mahsulotlari": [["Sut","1,5 litr",14000],["Qatiq","1 litr",12000],["Kefir","1 litr",12000],["Qaymoq","200 g",12000],["Sariyogʻ","200 g",16000],["Tvorog","500 g",20000],["Yogurt","1 dona",6000]],
+"Goʻsht va tuxum": [["Tuxum","10 dona",20000],["Tovuq goʻshti","1 kg",38000],["Mol goʻshti","1 kg",95000],["Qiyma","1 kg",80000],["Kolbasa","500 g",45000],["Sosiska","500 g",30000],["Baliq (muzlatilgan)","1 kg",35000]],
+"Sabzavot va meva": [["Kartoshka","1 kg",6000],["Piyoz","1 kg",4000],["Sabzi","1 kg",5000],["Karam","1 kg",4000],["Pomidor","1 kg",12000],["Bodring","1 kg",10000],["Qalampir","1 kg",14000],["Baqlajon","1 kg",8000],["Sarimsoq","100 g",3000],["Koʻkat","1 bogʻ",2000],["Limon","1 kg",20000],["Olma","1 kg",15000],["Banan","1 kg",22000],["Apelsin","1 kg",18000],["Mandarin","1 kg",15000]],
+"Yorma va oziq-ovqat": [["Guruch","1 kg",18000],["Grechka","800 g",16000],["Loviya","1 kg",20000],["Noʻxat","1 kg",14000],["Shakar","1 kg",14000],["Tuz","1 kg",3000],["Oʻsimlik yogʻi","1 litr",20000],["Qora choy","100 g",12000],["Yashil choy","100 g",12000],["Kofe 3 in 1","1 dona",2000],["Konserva","1 banka",15000],["Ketchup","300 g",12000],["Mayonez","400 g",14000],["Pomidor pastasi","300 g",10000],["Sirka","500 ml",5000],["Ziravor","1 paket",3000]],
+"Shirinlik va gazak": [["Pechenye","1 pachka",8000],["Shokolad","1 dona",10000],["Konfet","500 g",25000],["Chips","1 pachka",9000],["Muzqaymoq","1 dona",6000],["Saqich","1 dona",2000]],
+"Uy-roʻzgʻor": [["Sovun","1 dona",4000],["Shampun","400 ml",25000],["Kir yuvish kukuni","400 g",12000],["Idish yuvish suyuqligi","500 ml",10000],["Tualet qogʻozi","4 rulon",12000],["Salfetka","1 pachka",4000],["Chiqindi paketi","1 rulon",5000],["Tish pastasi","1 dona",15000],["Tish choʻtkasi","1 dona",8000],["Batareyka","2 dona",8000],["Gugurt","1 quti",500],["Lampochka","1 dona",10000]]
+};
+const PRODUCTS = [];
+for (const c in CATS) CATS[c].forEach(a => PRODUCTS.push({c, n:a[0], d:a[1], p:a[2]}));
+/* ===================================================== */
+
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+const qty = {};
+const fmt = n => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " soʻm";
+document.getElementById("dl").textContent = fmt(DELIVERY);
+
+const list = document.getElementById("list");
+let cur = "";
+PRODUCTS.forEach((x, i) => {
+  if (x.c !== cur) { cur = x.c; const h = document.createElement("h2"); h.textContent = cur; h.dataset.cat = cur; list.appendChild(h); }
+  const r = document.createElement("div");
+  r.className = "row"; r.dataset.cat = x.c; r.dataset.s = (x.n + " " + x.d).toLowerCase();
+  r.innerHTML = '<div class="info"><div class="name">' + x.n + '</div><div class="sub">' + x.d +
+    '</div><div class="price">' + fmt(x.p) + '</div></div><div class="ctl" id="c' + i + '"></div>';
+  list.appendChild(r);
+  draw(i);
+});
+document.getElementById("q").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase(), seen = {};
+  list.querySelectorAll(".row").forEach(r => { const ok = !q || r.dataset.s.includes(q); r.hidden = !ok; if (ok) seen[r.dataset.cat] = 1; });
+  list.querySelectorAll("h2").forEach(h => { h.hidden = !seen[h.dataset.cat]; });
+});
+
+function draw(i) {
+  const c = document.getElementById("c" + i), q = qty[i] || 0;
+  c.innerHTML = q
+    ? '<button aria-label="Kamaytirish" data-i="' + i + '" data-d="-1">−</button><span>' + q +
+      '</span><button class="add" aria-label="Koʻpaytirish" data-i="' + i + '" data-d="1">+</button>'
+    : '<button class="add" aria-label="Savatga qoʻshish" data-i="' + i + '" data-d="1">+</button>';
+}
+list.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const i = +b.dataset.i;
+  qty[i] = Math.max(0, (qty[i] || 0) + +b.dataset.d);
+  draw(i); sum();
+});
+function items() { return PRODUCTS.map((x, i) => ({x, q: qty[i] || 0})).filter(o => o.q > 0); }
+function sum() {
+  const s = items().reduce((a, o) => a + o.x.p * o.q, 0);
+  document.getElementById("total").textContent = s ? fmt(s + DELIVERY) : "0 soʻm";
+  document.getElementById("err").textContent = "";
+}
+document.getElementById("go").addEventListener("click", () => {
+  try {
+  const err = document.getElementById("err");
+  const addr = document.getElementById("addr").value.trim();
+  const tel = document.getElementById("tel").value.trim();
+  const note = document.getElementById("note").value.trim();
+  const it = items();
+  if (!it.length) { err.textContent = "Avval kamida bitta mahsulot tanlang."; return; }
+  if (addr.length < 5) { err.textContent = "Manzilni yozing."; return; }
+  if (tel.replace(/\D/g, "").length < 9) { err.textContent = "Telefon raqamni toʻliq yozing."; return; }
+  if (OWNER === "SIZNING_USERNAME") { err.textContent = "Doʻkon egasining username’i hali kiritilmagan."; return; }
+  const s = it.reduce((a, o) => a + o.x.p * o.q, 0);
+  let m = "Yangi buyurtma\n\n";
+  it.forEach(o => { m += o.x.n + " (" + o.x.d + ") x " + o.q + " = " + fmt(o.x.p * o.q) + "\n"; });
+  m += "\nMahsulotlar: " + fmt(s) + "\nYetkazish: " + fmt(DELIVERY) + "\nJami: " + fmt(s + DELIVERY);
+  m += "\n\nManzil: " + addr + "\nTelefon: " + tel;
+  if (note) m += "\nIzoh: " + note;
+  const url = "https://t.me/" + OWNER + "?text=" + encodeURIComponent(m);
+  document.getElementById("rl").textContent = "Buyurtma tayyor. Pastdagi tugmani bosing yoki matnni nusxalab @" + OWNER + " ga yuboring:";
+  document.getElementById("msg").value = m;
+  document.getElementById("send").href = url;
+  const box = document.getElementById("res");
+  box.hidden = false;
+  box.scrollIntoView({behavior: "smooth", block: "center"});
+  try { if (tg && tg.openTelegramLink) tg.openTelegramLink(url); } catch (e) {}
+  } catch (e) { document.getElementById("err").textContent = "Xatolik: " + e.message; }
+});
+document.getElementById("cp").addEventListener("click", () => {
+  const t = document.getElementById("msg"); t.select();
+  try { navigator.clipboard.writeText(t.value); } catch (e) { document.execCommand("copy"); }
+  document.getElementById("cp").textContent = "Nusxalandi";
+});
+</script>
+</body>
+</html>
